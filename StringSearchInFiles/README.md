@@ -1,4 +1,4 @@
-#Hintergrund
+# Hintergrund
 Häufig hat man selbst oder jemand anderes zu einem Thema schon einmal einen Code geschrieben.
 Jetzt möchte man diesen Code für seine eigenen Zwecke verwenden, aber weiß nicht mehr, wie genau dieser File hieß.
 Um zu vermeiden, dass man in seinem File-Wust die Nadel im Heuhaufen suchen muss, soll dieses Tool helfen.
@@ -13,6 +13,5 @@ Führe Funktion StringSearchInFiles() aus. Parameter:
 - pattern: Pattern of Files names to search through. Default: R, python and SQL -files)
 - surroundingarea: # of characters returned before and after the found string, Default: 20
 
-#
-Ergebniss:
+# Ergebniss:
 Übersicht aller Codes mit dem Pattern in dem definierten Ordner und Subordner. Und eine Vorschau der Pattern-Umgebung in den einzelnen Files.
