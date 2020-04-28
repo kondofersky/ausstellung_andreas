@@ -8,10 +8,10 @@ Um zu vermeiden, dass man in seinem File-Wust die Nadel im Heuhaufen suchen muss
 Führe Funktion StringSearchInFiles() aus. Parameter:
 - folder: Folder you want to search. Default: 'C:/nanoathenareports'
 - string: What you are searching for inside the code in Regex. Default: 'iasviewability'
-- myignorecase: should your search be case insensivite? Default: TRUE
+- myignorecase: Should your search be case insensivite? Default: TRUE
 - datefilter: Add a 'date modified' filter, if you want to. Only result younger than this will be shown. Default: NULL (means no date filter)
-- pattern: Pattern of Files names to search through. Default: R, python and SQL -files)
+- pattern: Pattern of Files names to search through. Default: R, python and SQL -files
 - surroundingarea: # of characters returned before and after the found string, Default: 20
 
-# Ergebniss:
+# Ergebnis
 Übersicht aller Codes mit dem Pattern in dem definierten Ordner und Subordner. Und eine Vorschau der Pattern-Umgebung in den einzelnen Files.
