@@ -1,7 +1,10 @@
 library(readr)
 library(stringr)
 #enter folder you want to search
-source(file = paste0(getwd(),'/StringSearchInFiles/functions.R'))
+functionfiles<-list.files(paste0(getwd(),'/StringSearchInFiles/functions'),full.names = T)
+for(myfunctionfile in functionfiles){
+  source(myfunctionfile)
+  }
 
 result<-stringSearch()
 

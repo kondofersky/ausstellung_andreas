@@ -1,40 +1,10 @@
-# function that searches string in file and returns how often it appeared
-findFiles<-function(file,string=string,myignorecase = T){
-  Code<-read_file(paste0(file))
-  #result.grepl<-grepl(pattern = string,x = Code,ignore.case = myignorecase)
-  result.count<-str_count(Code,regex(string,ignore_case = myignorecase))
-  return(data.frame(resultcount=result.count))
-}
-
-# display the area surroundings of string in file
-getSurroundings<-function(string='iasviewability',file,area=200,myignorecase = T){
-  Code<-read_file(file)
-  result.count<-str_count(Code,regex(string,ignore_case = myignorecase))
-  result<-vector(mode="character", length=result.count)
-  result2<-vector(mode="character", length=result.count)
-  
-  stringchars<-nchar(string)
-  allregexs<-gregexpr(pattern = string,text = Code)[[1]]
-  position <- 0
-  #return(result)
-   for(i in 1:result.count){
-     
-     #find position of ith appearance
-     result2[i] <- substr(x = Code,
-                          start = allregexs[i]-area,
-                          stop = allregexs[i]+area+stringchars
-                          )
-   }
-  
-  return(result2)
-}
 
 stringSearch<-
   function(
     # folder you want to search
-    folder = 'C:/nanoathenareports',
+    folder = paste0(getwd(),'/StringSearchInFiles'),
     # what you are searching for inside the code in Regex
-    string = 'iasviewability',
+    string = 'stringyouwillfind',
     # should your search be case insensivite?
     myignorecase = T,
     # add a 'date modified' filter, if you want to. Only result younger than this will be shown
@@ -63,8 +33,8 @@ stringSearch<-
     
     #
     fulllist<-data.frame(fileslist=filelist,
-                     appearancecount=fileSearch$resultcount,
-                     stringsAsFactors = F)
+                         appearancecount=fileSearch$resultcount,
+                         stringsAsFactors = F)
     
     
     # Filter only files, that contain string
