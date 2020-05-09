@@ -11,31 +11,22 @@ getSurroundings<-function(string='iasviewability',file,area=200,myignorecase = T
   Code<-read_file(file)
   result.count<-str_count(Code,regex(string,ignore_case = myignorecase))
   result<-vector(mode="character", length=result.count)
+  result2<-vector(mode="character", length=result.count)
+  
   stringchars<-nchar(string)
+  allregexs<-gregexpr(pattern = string,text = Code)[[1]]
   position <- 0
   #return(result)
-  for(i in 1:result.count){
-    #find position of ith appearance
-    loopcode<-
-    substring(Code,
-              position+((i-1)<0)*stringchars,
-              nchar(Code)
-    )
-    positionupdate<-regexpr(pattern=string,
-                      text = loopcode,
-                      
-                      ignore.case = myignorecase)
-    position<-position+positionupdate
-    result[i]<-substring(text = loopcode,
-                         first = max(positionupdate-area,1),
-                         last = min(positionupdate+area+stringchars,
-                                    nchar(loopcode)
-                                    )
-                         )
-  }
+   for(i in 1:result.count){
+     
+     #find position of ith appearance
+     result2[i] <- substr(x = Code,
+                          start = allregexs[i]-area,
+                          stop = allregexs[i]+area+stringchars
+                          )
+   }
   
-  
-  return(result)
+  return(result2)
 }
 
 stringSearch<-
