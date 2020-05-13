@@ -6,7 +6,7 @@ getSurroundings<-function(string='iasviewability',file,area=200,myignorecase = T
   result2<-vector(mode="character", length=result.count)
   
   stringchars<-nchar(string)
-  allregexs<-gregexpr(pattern = string,text = Code)[[1]]
+  allregexs<-gregexpr(pattern = string,text = Code,ignore.case = myignorecase)[[1]]
   position <- 0
   #return(result)
   for(i in 1:result.count){

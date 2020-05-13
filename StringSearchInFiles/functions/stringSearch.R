@@ -28,7 +28,7 @@ stringSearch<-
     # sort by 'last modified' date
     filelist<-filelist[order(file.info(filelist)$mtime,decreasing = T)]
     # Does file-content match string?
-    fileSearch<-lapply(X = filelist,FUN = findFiles,string=string)
+    fileSearch<-lapply(X = filelist,FUN = findFiles,string=string,myignorecase = myignorecase)
     fileSearch<-do.call(what = rbind,args = fileSearch)
     
     #
