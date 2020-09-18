@@ -221,9 +221,10 @@ server <- function(input, output, session) {
       aes(x = referencedate,
           y = total)
     ) +
-    geom_line() + xlab('Time') + ylab('Fälle nach Altersgruppe') + theme_bw() +
+    geom_line() + ylab('Fälle') + xlab('Time')  + theme_bw() +
     scale_colour_brewer(type = 'qual') +
-    facet_wrap( ~ Altersgruppe, scales = 'free_y')
+    facet_wrap( ~ Altersgruppe, scales = 'free_y') +
+    ggtitle(paste0('Fälle nach Altersgruppe'))
   ggplotly(plot)
 })
   # output$byGender <- renderPlotly({
