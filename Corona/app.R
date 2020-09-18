@@ -180,6 +180,7 @@ server <- function(input, output, session) {
         aes(x = referencedate,
             y = total)
       ) +
+      geom_smooth() +
       geom_line() + xlab('Date') + ylab('Fälle') + theme_bw() +
       geom_hline(yintercept = grenzmean, color = "red") +
       geom_hline(yintercept = grenzmeanyellow, color = "yellow") +
