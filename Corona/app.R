@@ -52,7 +52,7 @@ body <-
     column(6,
            plotlyOutput('total', width = '100%'))),
     fluidRow(column(12,
-           plotlyOutput('byAge', width = '90%'))),
+           plotlyOutput('byAge', width = '100%'))),
 #    fluidRow(plotlyOutput('byGender', width = '100%')),
     fluidRow(
       box(
