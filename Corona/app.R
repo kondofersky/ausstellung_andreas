@@ -5,6 +5,8 @@ library(plotly)
 library(shiny)
 library(shinydashboard)
 library(data.table)
+library(httr)
+
 # functions
 wd.function <- paste0(getwd(), '/Corona/functions')
 files.sources <- list.files(
@@ -44,11 +46,14 @@ body <-
       )
     )),
     fluidRow(column(
-      6,
+      5.8,
       plotlyOutput('inzidenz', width = '100%')
     ),
-    column(6,
+    column(5.8,
            plotlyOutput('total', width = '100%'))),
+    column(11.6,
+           fluidRow(plotlyOutput('byAge', width = '100%'))),
+#    fluidRow(plotlyOutput('byGender', width = '100%')),
     fluidRow(
       box(
         title = 'Grouped per day',
@@ -73,18 +78,30 @@ ui <- fluidPage(withMathJax(),
                 dashboardPage(header, sidebar, body))
 
 server <- function(input, output, session) {
-  munichdata <- reactive({
-    mydata <-
-      fromJSON(
-        'https://opendata.arcgis.com/datasets/dd4580c810204019a7b8eb3e0b329dd6_0.geojson'
-      )
-    mydata <- mydata[[3]]$properties
-    mydata$referencedate <-
-      as.Date(substring(mydata$Meldedatum, 1, 10))
-    bayerndata <- mydata %>% filter(Bundesland == 'Bayern')
-    munichdata <- bayerndata %>% filter(Landkreis == 'SK München')
-    return(munichdata)
-  })
+  munichdata <-
+    reactivePoll(
+      intervalMillis = 5 * 60 * 1000,
+      session = session,
+      checkFunc = function() {
+        mywebcrawl <-
+          GET(
+            'https://opendata.arcgis.com/datasets/dd4580c810204019a7b8eb3e0b329dd6_0.geojson'
+          )
+        return(mywebcrawl$headers$`last-modified`)
+      },
+      valueFunc = function() {
+        mydata <-
+          fromJSON(
+            'https://opendata.arcgis.com/datasets/dd4580c810204019a7b8eb3e0b329dd6_0.geojson'
+          )
+        mydata <- mydata[[3]]$properties
+        mydata$referencedate <-
+          as.Date(substring(mydata$Meldedatum, 1, 10))
+        bayerndata <- mydata %>% filter(Bundesland == 'Bayern')
+        munichdata <- bayerndata %>% filter(Landkreis == 'SK München')
+        return(munichdata)
+      }
+    )
   
   maxDate <- reactive({
     max(munichdata()$referencedate)
@@ -149,7 +166,7 @@ server <- function(input, output, session) {
         aes(x = referencedate,
             y = siebentageinzidenz)
       ) +
-      geom_line() + xlab('Date') + ylab('Siebentageinzidenz') + theme_bw() +
+      geom_line() + xlab('Time') + ylab('Siebentageinzidenz') + theme_bw() +
       geom_hline(yintercept = 50, color = "red") +
       geom_hline(yintercept = 35, color = "yellow") +
       theme(
@@ -164,7 +181,7 @@ server <- function(input, output, session) {
   })
   
   #plot<-ggplot(data=perdaynew, aes(x=referencedate, y=siebentageinzidenz))+
-  #  geom_line()+ xlab('Date') + ylab('Siebentageinzidenz') + theme_bw() +
+  #  geom_line()+ xlab('Time') + ylab('Siebentageinzidenz') + theme_bw() +
   #  geom_hline(yintercept=50,color = "red") +
   #  geom_hline(yintercept=35, color = "yellow")+
   #  scale_colour_brewer(type = 'qual')+
@@ -180,8 +197,8 @@ server <- function(input, output, session) {
         aes(x = referencedate,
             y = total)
       ) +
-      geom_smooth(span=.3) +
-      geom_line() + xlab('Date') + ylab('Fälle') + theme_bw() +
+      geom_smooth(span = .3) +
+      geom_line() + xlab('Time') + ylab('Fälle') + theme_bw() +
       geom_hline(yintercept = grenzmean, color = "red") +
       geom_hline(yintercept = grenzmeanyellow, color = "yellow") +
       theme(
@@ -194,6 +211,37 @@ server <- function(input, output, session) {
     #renderPlotly(
     ggplotly(plot)
   })
+  
+  output$byAge <- renderPlotly({  
+  plot <-
+    ggplot(
+      data = munichdata() %>% group_by(referencedate, Altersgruppe) %>% summarize(total =
+                                                                                  sum(AnzahlFall)),
+      aes(x = referencedate,
+          y = total)
+    ) +
+    geom_line() + xlab('Time') + ylab('Fälle nach Altersgruppe') + theme_bw() +
+    scale_colour_brewer(type = 'qual') +
+    facet_wrap( ~ Altersgruppe, scales = 'free_y')
+  ggplotly(plot)
+})
+  # output$byGender <- renderPlotly({
+  # plot <-
+  #   ggplot(
+  #     data = munichdata() %>% group_by(referencedate, Geschlecht) %>% summarize(total =
+  #                                                                               sum(AnzahlFall)),
+  #     aes(x = referencedate,
+  #         y = total)
+  #   ) +
+  #   geom_line() + xlab('Time') + ylab('Fälle nach Geschlecht') + theme_bw() +
+  #   scale_colour_brewer(type = 'qual') +
+  #   facet_wrap( ~ Geschlecht, scales = 'free_y')
+  # ggplotly(plot)
+  # })
+  
+  
+  
+  
   output$tableout4 <- DT::renderDataTable({
     DT::datatable(
       perdaynew() %>% filter(
