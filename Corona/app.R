@@ -46,13 +46,13 @@ body <-
       )
     )),
     fluidRow(column(
-      5.8,
+      6,
       plotlyOutput('inzidenz', width = '100%')
     ),
-    column(5.8,
+    column(6,
            plotlyOutput('total', width = '100%'))),
-    column(11.6,
-           fluidRow(plotlyOutput('byAge', width = '100%'))),
+    fluidRow(column(12,
+           plotlyOutput('byAge', width = '90%'))),
 #    fluidRow(plotlyOutput('byGender', width = '100%')),
     fluidRow(
       box(
@@ -197,6 +197,7 @@ server <- function(input, output, session) {
         aes(x = referencedate,
             y = total)
       ) +
+      coord_cartesian(ylim=c(min(perdaynew()$total)-5,max(perdaynew()$total)+5)) +
       geom_smooth(span = .3) +
       geom_line() + xlab('Time') + ylab('Fälle') + theme_bw() +
       geom_hline(yintercept = grenzmean, color = "red") +
