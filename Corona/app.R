@@ -124,7 +124,7 @@ server <- function(input, output, session) {
         ),
         removed = lag(x = total, n = 7),
         removednext = lag(x = total, n = 6),
-        maxtoRed = missingtoRed + removednext
+        tomorrowmaxtoRed = missingtoRed + removednext
       ) %>%
       filter(referencedate >= (minDate() + 7)) %>%
       mutate(
@@ -137,7 +137,7 @@ server <- function(input, output, session) {
           TRUE ~ 'GREEN'
         )
       ) %>%
-      select(-c(missingtoRed, removednext))
+      select(-c(trendgoodBad))
   })
   output$inzidenz <-  renderPlotly({
     plot <-
