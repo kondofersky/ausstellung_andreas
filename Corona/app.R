@@ -4,7 +4,7 @@ library(ggplot2)
 library(plotly)
 library(shiny)
 library(shinydashboard)
-library(data.table)
+library(DT)
 library(httr)
 
 # functions
@@ -33,46 +33,54 @@ header <- dashboardHeader(title = 'Corona Numbers Munich')
 sidebar <- dashboardSidebar(disable = T)
 
 body <-
-  dashboardBody(fluidPage(
-    fluidRow(column(
-      3,
-      dateRangeInput(
-        inputId = 'dates',
-        label = 'Date Range',
-        start = NULL,
-        end = NULL,
-        min = NULL,
-        weekstart	= 1
-      )
-    )),
-    fluidRow(column(
-      6,
-      plotlyOutput('inzidenz', width = '100%')
-    ),
-    column(6,
-           plotlyOutput('total', width = '100%'))),
-    fluidRow(column(12,
-           plotlyOutput('byAge', width = '100%'))),
-#    fluidRow(plotlyOutput('byGender', width = '100%')),
-    fluidRow(
-      box(
-        title = 'Grouped per day',
-        status = 'primary',
-        width = 12,
-        collapsible = TRUE,
-        DT::dataTableOutput(outputId = 'tableout4')
-      )
-    ),
-    fluidRow(
-      box(
-        title = 'Raw data',
-        status = 'primary',
-        width = 12,
-        collapsible = TRUE,
-        DT::dataTableOutput(outputId = 'tableout3')
+  dashboardBody(
+    fluidPage(
+      fluidRow(column(
+        3,
+        dateRangeInput(
+          inputId = 'dates',
+          label = 'Date Range',
+          start = NULL,
+          end = NULL,
+          min = NULL,
+          weekstart	= 1
+        )
+      )),
+      fluidRow(column(
+        12,
+        plotlyOutput('inzidenz', width = '100%')
+      )),
+      fluidRow(column(6,
+                      plotlyOutput('total', width = '100%')),
+               column(6,
+                      plotlyOutput('deaths', width = '100%'))),
+      fluidRow(column(12,
+                      plotlyOutput('byAge', width = '100%'))),
+      #    fluidRow(plotlyOutput('byGender', width = '100%')),
+      fluidRow(column(
+        12,
+        plotlyOutput('deathsbyAge', width = '100%')
+      )),
+      fluidRow(
+        box(
+          title = 'Grouped per day',
+          status = 'primary',
+          width = 12,
+          collapsible = TRUE,
+          DT::dataTableOutput(outputId = 'tableout4')
+        )
+      ),
+      fluidRow(
+        box(
+          title = 'Raw data',
+          status = 'primary',
+          width = 12,
+          collapsible = TRUE,
+          DT::dataTableOutput(outputId = 'tableout3')
+        )
       )
     )
-  ))
+  )
 #withMathJax($$\\IN$$)
 ui <- fluidPage(withMathJax(),
                 dashboardPage(header, sidebar, body))
@@ -98,7 +106,8 @@ server <- function(input, output, session) {
         mydata$referencedate <-
           as.Date(substring(mydata$Meldedatum, 1, 10))
         bayerndata <- mydata %>% filter(Bundesland == 'Bayern')
-        munichdata <- bayerndata %>% filter(Landkreis == 'SK München')
+        munichdata <-
+          bayerndata %>% filter(Landkreis == 'SK München')
         return(munichdata)
       }
     )
@@ -122,7 +131,8 @@ server <- function(input, output, session) {
   
   perday <-
     reactive({
-      group_by(munichdata(), referencedate) %>% summarize(total = sum(AnzahlFall))
+      group_by(munichdata(), referencedate) %>% summarize(total = sum(AnzahlFall),
+                                                          todesfaelle = sum(AnzahlTodesfall))
     })
   perdaynew <- reactive({
     perday() %>% group_by(referencedate) %>%
@@ -130,15 +140,15 @@ server <- function(input, output, session) {
         siebentageinzidenz = round(x = getsiebentageinzidenz(referencedate, perday()), digits =
                                      1),
         siebentagetotal = getsiebentagetotal(referencedate, perday()),
-        missingtoRed = round(grenzmean * 7 - siebentagetotal)
-      ) %>%
-      ungroup() %>%
-      mutate(
         state = case_when(
           siebentageinzidenz > 50 ~ 'RED',
           siebentageinzidenz > 35 ~ 'YELLOW',
           TRUE ~ 'GREEN'
         ),
+        missingtoRed = round(grenzmean * 7 - siebentagetotal)
+      ) %>%
+      ungroup() %>%
+      mutate(
         removed = lag(x = total, n = 7),
         removednext = lag(x = total, n = 6),
         tomorrowmaxtoRed = missingtoRed + removednext
@@ -166,6 +176,12 @@ server <- function(input, output, session) {
         aes(x = referencedate,
             y = siebentageinzidenz)
       ) +
+      xlim(c(min(perdaynew()$referencedate), as.Date(max(
+        perdaynew()$referencedate
+      ) + 100))) +
+      coord_cartesian(ylim = c(0, max(perdaynew()$siebentageinzidenz) +
+                                 50)) +
+      stat_smooth(fullrange = TRUE, method = 'gam') +
       geom_line() + xlab('Time') + ylab('Siebentageinzidenz') + theme_bw() +
       geom_hline(yintercept = 50, color = "red") +
       geom_hline(yintercept = 35, color = "yellow") +
@@ -197,9 +213,12 @@ server <- function(input, output, session) {
         aes(x = referencedate,
             y = total)
       ) +
-    xlim(c(min(perdaynew()$referencedate),as.Date(max(perdaynew()$referencedate) + 100))) + 
-      coord_cartesian(ylim=c(min(perdaynew()$total)-5,max(perdaynew()$total)+100)) +
-      stat_smooth(fullrange = TRUE, method = 'gam')+
+      xlim(c(min(perdaynew()$referencedate), as.Date(max(
+        perdaynew()$referencedate
+      ) + 100))) +
+      coord_cartesian(ylim = c(min(perdaynew()$total) - 5, max(perdaynew()$total) +
+                                 100)) +
+      stat_smooth(fullrange = TRUE, method = 'gam') +
       geom_line() + xlab('Time') + ylab('Fälle') + theme_bw() +
       geom_hline(yintercept = grenzmean, color = "red") +
       geom_hline(yintercept = grenzmeanyellow, color = "yellow") +
@@ -214,20 +233,63 @@ server <- function(input, output, session) {
     ggplotly(plot)
   })
   
-  output$byAge <- renderPlotly({  
-  plot <-
-    ggplot(
-      data = munichdata() %>% group_by(referencedate, Altersgruppe) %>% summarize(total =
-                                                                                  sum(AnzahlFall)),
-      aes(x = referencedate,
-          y = total)
-    ) +
-    geom_line() + ylab('Fälle') + xlab('Time')  + theme_bw() +
-    scale_colour_brewer(type = 'qual') +
-    facet_wrap( ~ Altersgruppe, scales = 'free_y') +
-    ggtitle(paste0('Fälle nach Altersgruppe'))
-  ggplotly(plot)
-})
+  output$deaths <- renderPlotly({
+    plot <-
+      ggplot(
+        data = perdaynew() %>% filter(
+          referencedate >= input$dates[1] & referencedate <= input$dates[2]
+        ),
+        aes(x = referencedate,
+            y = todesfaelle)
+      ) +
+      xlim(c(min(perdaynew()$referencedate), as.Date(max(
+        perdaynew()$referencedate
+      ) + 100))) +
+      coord_cartesian(ylim = c(0, max(perdaynew()$todesfaelle) + 5)) +
+      stat_smooth(fullrange = TRUE, method = 'gam') +
+      geom_line() + xlab('Time') + ylab('Fälle') + theme_bw() +
+      geom_hline(yintercept = grenzmean, color = "red") +
+      geom_hline(yintercept = grenzmeanyellow, color = "yellow") +
+      theme(
+        legend.title = element_blank(),
+        legend.position = "bottom",
+        legend.text = element_text(size = 12)
+      ) + ggtitle(paste0('Todesfälle München'))# +
+    
+    #scale_colour_brewer(type = 'qual')
+    #renderPlotly(
+    ggplotly(plot)
+  })
+  
+  output$byAge <- renderPlotly({
+    plot <-
+      ggplot(
+        data = munichdata() %>% group_by(referencedate, Altersgruppe) %>% summarize(total =
+                                                                                      sum(AnzahlFall)),
+        aes(x = referencedate,
+            y = total)
+      ) +
+      geom_line() + ylab('Fälle') + xlab('Time')  + theme_bw() +
+      scale_colour_brewer(type = 'qual') +
+      facet_wrap(~ Altersgruppe, scales = 'free_y') +
+      ggtitle(paste0('Fälle nach Altersgruppe'))
+    ggplotly(plot)
+  })
+  output$deathsbyAge <- renderPlotly({
+    plot <-
+      ggplot(
+        data = munichdata() %>% group_by(referencedate, Altersgruppe) %>% summarize(deaths =
+                                                                                      sum(AnzahlTodesfall)),
+        aes(x = referencedate,
+            y = deaths)
+      ) +
+      geom_line() + ylab('Todesfälle') + xlab('Time')  + theme_bw() +
+      scale_colour_brewer(type = 'qual') +
+      facet_wrap(~ Altersgruppe, scales = 'free_y') +
+      ggtitle(paste0('Todesfälle nach Altersgruppe'))
+    ggplotly(plot)
+  })
+  
   # output$byGender <- renderPlotly({
   # plot <-
   #   ggplot(
@@ -243,27 +305,33 @@ server <- function(input, output, session) {
   # })
   
   
-  
-  
   output$tableout4 <- DT::renderDataTable({
-    DT::datatable(
-      perdaynew() %>% filter(
-        referencedate >= input$dates[1] &
-          referencedate <= input$dates[2]
-      ) %>% arrange(desc(referencedate)),
-      extensions = 'Buttons',
-      options = list(
-        lengthMenu = c(5, 10, 30),
-        pageLength = 10,
-        scrollX = TRUE,
-        dom = 'Bflrtip',
-        buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
-      ),
-      rownames = F,
-      height = 10000,
-      class = 'cell-border stripe'
+    formatStyle(
+      DT::datatable(
+        perdaynew() %>% filter(
+          referencedate >= input$dates[1] &
+            referencedate <= input$dates[2]
+        ) %>% arrange(desc(referencedate)),
+        extensions = 'Buttons',
+        options = list(
+          lengthMenu = c(5, 20, 100),
+          pageLength = 20,
+          scrollX = TRUE,
+          dom = 'Bflrtip',
+          buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+        ),
+        rownames = F,
+        height = 10000,
+        class = 'cell-border stripe'
+      )
+      ,
+      c('statetoday', 'state'),
+      backgroundColor = styleEqual(c('GREEN', 'YELLOW'),
+                                   c('lightgreen', 'yellow'),
+                                   default = 'red')
     )
   })
+  
   output$tableout3 <- DT::renderDataTable({
     DT::datatable(
       munichdata() %>% filter(
@@ -271,8 +339,8 @@ server <- function(input, output, session) {
       ),
       extensions = 'Buttons',
       options = list(
-        lengthMenu = c(5, 10, 30),
-        pageLength = 10,
+        lengthMenu = c(5, 100, 1000),
+        pageLength = 100,
         scrollX = TRUE,
         dom = 'Bflrtip',
         buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
