@@ -158,7 +158,7 @@ server <- function(input, output, session) {
         trend = total - removed,
         trendgoodBad = case_when(trend > 0 ~ 'BAD',
                                  TRUE ~ 'GOOD'),
-        statetoday = case_when(
+        statereferencedate = case_when(
           total > grenzmean ~ 'RED',
           total > grenzmeanyellow ~ 'YELLOW',
           TRUE ~ 'GREEN'
@@ -219,7 +219,7 @@ server <- function(input, output, session) {
       coord_cartesian(ylim = c(min(perdaynew()$total) - 5, max(perdaynew()$total) +
                                  100)) +
       stat_smooth(fullrange = TRUE, method = 'gam') +
-      geom_line() + xlab('Time') + ylab('Fälle') + theme_bw() +
+      geom_col() + xlab('Time') + ylab('Fälle') + theme_bw() +
       geom_hline(yintercept = grenzmean, color = "red") +
       geom_hline(yintercept = grenzmeanyellow, color = "yellow") +
       theme(
@@ -247,7 +247,7 @@ server <- function(input, output, session) {
       ) + 100))) +
       coord_cartesian(ylim = c(0, max(perdaynew()$todesfaelle) + 5)) +
       stat_smooth(fullrange = TRUE, method = 'gam') +
-      geom_line() + xlab('Time') + ylab('Fälle') + theme_bw() +
+      geom_col()  + xlab('Time') + ylab('Fälle') + theme_bw() +
       geom_hline(yintercept = grenzmean, color = "red") +
       geom_hline(yintercept = grenzmeanyellow, color = "yellow") +
       theme(
@@ -269,7 +269,7 @@ server <- function(input, output, session) {
         aes(x = referencedate,
             y = total)
       ) +
-      geom_line() + ylab('Fälle') + xlab('Time')  + theme_bw() +
+      geom_col() + ylab('Fälle') + xlab('Time')  + theme_bw() +
       scale_colour_brewer(type = 'qual') +
       facet_wrap(~ Altersgruppe, scales = 'free_y') +
       ggtitle(paste0('Fälle nach Altersgruppe'))
@@ -283,7 +283,7 @@ server <- function(input, output, session) {
         aes(x = referencedate,
             y = deaths)
       ) +
-      geom_line() + ylab('Todesfälle') + xlab('Time')  + theme_bw() +
+      geom_col() + ylab('Todesfälle') + xlab('Time')  + theme_bw() +
       scale_colour_brewer(type = 'qual') +
       facet_wrap(~ Altersgruppe, scales = 'free_y') +
       ggtitle(paste0('Todesfälle nach Altersgruppe'))
@@ -314,7 +314,7 @@ server <- function(input, output, session) {
         ) %>% arrange(desc(referencedate)),
         extensions = 'Buttons',
         options = list(
-          lengthMenu = c(5, 20, 100),
+          lengthMenu = c(5, 20, 1000),
           pageLength = 20,
           scrollX = TRUE,
           dom = 'Bflrtip',
@@ -325,7 +325,7 @@ server <- function(input, output, session) {
         class = 'cell-border stripe'
       )
       ,
-      c('statetoday', 'state'),
+      c('statereferencedate', 'state'),
       backgroundColor = styleEqual(c('GREEN', 'YELLOW'),
                                    c('lightgreen', 'yellow'),
                                    default = 'red')
@@ -339,7 +339,7 @@ server <- function(input, output, session) {
       ),
       extensions = 'Buttons',
       options = list(
-        lengthMenu = c(5, 100, 1000),
+        lengthMenu = c(5, 100, 100000),
         pageLength = 100,
         scrollX = TRUE,
         dom = 'Bflrtip',
