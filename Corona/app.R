@@ -306,7 +306,7 @@ server <- function(input, output, session) {
   
   
   output$tableout4 <- DT::renderDataTable({
-    formatStyle(
+    
       DT::datatable(
         perdaynew() %>% filter(
           referencedate >= input$dates[1] &
@@ -318,18 +318,27 @@ server <- function(input, output, session) {
           pageLength = 20,
           scrollX = TRUE,
           dom = 'Bflrtip',
-          buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+          buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+          columnDefs = list(list(targets =c(5,11), visible = FALSE))
         ),
         rownames = F,
         height = 10000,
         class = 'cell-border stripe'
-      )
-      ,
-      c('statereferencedate', 'state'),
+          
+        
+      )%>%
+      formatStyle(
+      'siebentagetotal', 'state',
       backgroundColor = styleEqual(c('GREEN', 'YELLOW'),
                                    c('lightgreen', 'yellow'),
                                    default = 'red')
-    )
+    )%>%
+      formatStyle(
+        'total', 'statereferencedate',
+        backgroundColor = styleEqual(c('GREEN', 'YELLOW'),
+                                     c('lightgreen', 'yellow'),
+                                     default = 'red')
+      )
   })
   
   output$tableout3 <- DT::renderDataTable({
