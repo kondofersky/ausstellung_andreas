@@ -327,9 +327,9 @@ server <- function(input, output, session) {
       class = 'cell-border stripe',
       callback = JS(
         "
-var tips = ['referencedate', 'Cases on that day',
+var tips = ['referencedate', 'Cases on that day; Meaning of the color: State of Siebentageinzidenz, if every day would have the same amount of cases as referencedate',
             'Deaths on that day',
-            '(cases for the last 7 days) / (munich population) * 100,000',
+            '(cases for the last 7 days) / (munich population) * 100,000; Red: > 50, Green: <=35, Yellow: Else',
             'Sum of cases for the last 7 days',
             'will be removed',
             'How many more cases would have meant a siebentageinzidenz over 50',
@@ -345,7 +345,7 @@ for (var i = 0; i < tips.length; i++) {
       
       
     ) %>%
-      formatStyle('siebentagetotal',
+      formatStyle('siebentageinzidenz',
                   'state',
                   backgroundColor = styleEqual(c('GREEN', 'YELLOW'),
                                                c('lightgreen', 'yellow'),
