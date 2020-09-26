@@ -132,7 +132,7 @@ server <- function(input, output, session) {
   perday <-
     reactive({
       group_by(munichdata(), referencedate) %>% summarize(total = sum(AnzahlFall),
-                                                          todesfaelle = sum(AnzahlTodesfall))
+                                                          deaths = sum(AnzahlTodesfall))
     })
   perdaynew <- reactive({
     perday() %>% group_by(referencedate) %>%
@@ -240,12 +240,12 @@ server <- function(input, output, session) {
           referencedate >= input$dates[1] & referencedate <= input$dates[2]
         ),
         aes(x = referencedate,
-            y = todesfaelle)
+            y = deaths)
       ) +
       xlim(c(min(perdaynew()$referencedate), as.Date(max(
         perdaynew()$referencedate
       ) + 100))) +
-      coord_cartesian(ylim = c(0, max(perdaynew()$todesfaelle) + 5)) +
+      coord_cartesian(ylim = c(0, max(perdaynew()$deaths) + 5)) +
       stat_smooth(fullrange = TRUE, method = 'gam') +
       geom_col()  + xlab('Time') + ylab('Fälle') + theme_bw() +
       geom_hline(yintercept = grenzmean, color = "red") +
@@ -271,7 +271,7 @@ server <- function(input, output, session) {
       ) +
       geom_col() + ylab('Fälle') + xlab('Time')  + theme_bw() +
       scale_colour_brewer(type = 'qual') +
-      facet_wrap(~ Altersgruppe, scales = 'free_y') +
+      facet_wrap( ~ Altersgruppe, scales = 'free_y') +
       ggtitle(paste0('Fälle nach Altersgruppe'))
     ggplotly(plot)
   })
@@ -285,7 +285,7 @@ server <- function(input, output, session) {
       ) +
       geom_col() + ylab('Todesfälle') + xlab('Time')  + theme_bw() +
       scale_colour_brewer(type = 'qual') +
-      facet_wrap(~ Altersgruppe, scales = 'free_y') +
+      facet_wrap( ~ Altersgruppe, scales = 'free_y') +
       ggtitle(paste0('Todesfälle nach Altersgruppe'))
     ggplotly(plot)
   })
@@ -306,39 +306,55 @@ server <- function(input, output, session) {
   
   
   output$tableout4 <- DT::renderDataTable({
-    
-      DT::datatable(
-        perdaynew() %>% filter(
-          referencedate >= input$dates[1] &
-            referencedate <= input$dates[2]
-        ) %>% arrange(desc(referencedate)),
-        extensions = 'Buttons',
-        options = list(
-          lengthMenu = c(5, 20, 1000),
-          pageLength = 20,
-          scrollX = TRUE,
-          dom = 'Bflrtip',
-          buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
-          columnDefs = list(list(targets =c(5,11), visible = FALSE))
-        ),
-        rownames = F,
-        height = 10000,
-        class = 'cell-border stripe'
-          
-        
-      )%>%
-      formatStyle(
-      'siebentagetotal', 'state',
-      backgroundColor = styleEqual(c('GREEN', 'YELLOW'),
-                                   c('lightgreen', 'yellow'),
-                                   default = 'red')
-    )%>%
-      formatStyle(
-        'total', 'statereferencedate',
-        backgroundColor = styleEqual(c('GREEN', 'YELLOW'),
-                                     c('lightgreen', 'yellow'),
-                                     default = 'red')
-      )
+    DT::datatable(
+      perdaynew() %>% filter(
+        referencedate >= input$dates[1] &
+          referencedate <= input$dates[2]
+      ) %>% arrange(desc(referencedate)),
+      extensions = 'Buttons',
+      options = list(
+        lengthMenu = c(5, 20, 1000),
+        pageLength = 20,
+        scrollX = TRUE,
+        dom = 'Bflrtip',
+        buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+        columnDefs = list(list(
+          targets = c(5, 11), visible = FALSE
+        ))
+      ),
+      rownames = F,
+      height = 10000,
+      class = 'cell-border stripe',
+      callback = JS(
+        "
+var tips = ['referencedate', 'Cases on that day',
+            'Deaths on that day',
+            '(cases for the last 7 days) / (munich population) * 100,000',
+            'Sum of cases for the last 7 days',
+            'will be removed',
+            'How many more cases would have meant a siebentageinzidenz over 50',
+            'Amount of cases from 8 days before referencedate (= number of cases that were removed from the siebentageinzidenz calculation on referencedate)',
+            'Amount of cases from 7 days before referencedate (= number of cases that will be removed on the next day from the siebentageinzidenz-calculation)',
+            '((missing to red) + removednext) ( = how cases on the next day would mean a siebentageinzidenz over 50',
+            'total - removed'],
+    header = table.columns().header();
+for (var i = 0; i < tips.length; i++) {
+  $(header[i]).attr('title', tips[i]);
+}
+")
+      
+      
+    ) %>%
+      formatStyle('siebentagetotal',
+                  'state',
+                  backgroundColor = styleEqual(c('GREEN', 'YELLOW'),
+                                               c('lightgreen', 'yellow'),
+                                               default = 'red')) %>%
+      formatStyle('total',
+                  'statereferencedate',
+                  backgroundColor = styleEqual(c('GREEN', 'YELLOW'),
+                                               c('lightgreen', 'yellow'),
+                                               default = 'red'))
   })
   
   output$tableout3 <- DT::renderDataTable({
