@@ -6,7 +6,19 @@ library(shiny)
 library(shinydashboard)
 library(DT)
 library(httr)
+library(openxlsx)
+# Stats from 2019-12-31
+population<-read.xlsx('https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales/Gemeindeverzeichnis/Administrativ/04-kreise.xlsx;jsessionid=5D16A0CE74B2CE61F0DC52ED94E6C8A5.internet8711?__blob=publicationFile',sheet = 2,startRow = 3)
+landkreisedim<-population%>%select(IdLandkreis=`Schlüssel-nummer`,Population=`Bevölkerung2)`,Landkreis=`Kreisfreie.Stadt`)%>%filter(nchar(IdLandkreis)==5)%>%mutate(id=c(substring(IdLandkreis,1,2)))
 
+# Since the official Munich page takes Munich numbers from 2018-12-31, I use this
+landkreisedim[landkreisedim$IdLandkreis=='09162',]$Population <- 1471508
+
+bundeslaender <- population%>%select(id=`Schlüssel-nummer`,Bundesland=Regionale.Bezeichnung)%>%
+  filter(nchar(id)==2)
+
+landkreisedim <-left_join(landkreisedim,bundeslaender,by=c('id'='id'))
+landkreisedim$id=NULL
 # functions
 wd.function <- paste0(getwd(), '/Corona/functions')
 files.sources <- list.files(
@@ -16,26 +28,27 @@ files.sources <- list.files(
   pattern = '*.R'
 )
 lapply(files.sources, source, verbose = FALSE)
-# Calculating Munich Einwohner from Numbers
-#einwohnerMunich<-612/41.6*100000
 # source of Infections: https://npgeo-corona-npgeo-de.hub.arcgis.com/datasets/dd4580c810204019a7b8eb3e0b329dd6_0/data
-
-einwohnerMunich <- 1471508
-# calculating Schwellen- and Signalwert
-grenzmean <- einwohnerMunich / 100000 * 50 / 7
-grenzmeanyellow <- einwohnerMunich / 100000 * 35 / 7
 
 # https://www.muenchen.de/rathaus/Stadtinfos/Coronavirus-Fallzahlen.html
 # Die Inzidenzzahl des Landesamtes für Gesundheit und Lebensmittelsicherheit bezieht sich auf die offizielle Einwohnerzahl der Stadt München (ohne Landkreis) zum 31.12.2018: 1.471.508 Einwohner.
 # Um lokale Ausbruchsereignisse rechtzeitig eindämmen zu können, wurde für die 7-Tage-Inzidenz ein Schwellenwert von 50 sowie als „Frühwarnsystem“ ein Signalwert von 35 festgelegt.
-header <- dashboardHeader(title = 'Corona Numbers Munich')
+header <- dashboardHeader(title = 'Corona Numbers Germany')
 
 sidebar <- dashboardSidebar(disable = T)
 
 body <-
   dashboardBody(
     fluidPage(
-      fluidRow(column(
+      fluidRow(column(3,selectizeInput(inputId = 'bundesland',
+                                                     label='Bundesland',
+                                                     choices=landkreisedim$Bundesland,
+                                                     selected='',multiple=T,
+                                                     options = list(onInitialize = I('function() { this.setValue(""); }'))
+      )
+      ),
+        column(3,uiOutput('landkreis')),
+               column(
         3,
         dateRangeInput(
           inputId = 'dates',
@@ -81,12 +94,37 @@ body <-
       )
     )
   )
-#withMathJax($$\\IN$$)
+
 ui <- fluidPage(withMathJax(),
                 dashboardPage(header, sidebar, body))
 
 server <- function(input, output, session) {
-  munichdata <-
+
+  output$landkreis<-renderUI({
+    mylandkreise <- landkreisedim%>%filter(grepl(pattern = selected_choices_bundesland(),x = Bundesland,ignore.case = TRUE))
+    selectizeInput(inputId = 'landkreis',
+                                              label = 'Landkreis',
+                                              choices=mylandkreise$Landkreis,
+                                              multiple=T,
+                                              options = list(
+                                                placeholder = '',
+                                                onInitialize = I('function() { this.setValue(""); }'))
+  )})
+  selected_choices_landkreis <- reactive(if (identical(input$landkreis, NULL)) {
+    '*'
+  } else{
+    paste0(input$landkreis, collapse = '|')
+  })
+  selected_choices_bundesland <- reactive(if (identical(input$bundesland, NULL)) {
+    '*'
+  } else{
+    paste0(input$bundesland, collapse = '|')
+  })
+  
+  myid<-reactive({tmppop <- landkreisedim%>%filter(grepl(pattern = selected_choices_landkreis(),x = Landkreis,ignore.case = TRUE)&grepl(pattern = selected_choices_bundesland(),x = Bundesland,ignore.case = TRUE))
+  return(tmppop$IdLandkreis)})
+  
+  mydata <-
     reactivePoll(
       intervalMillis = 5 * 60 * 1000,
       session = session,
@@ -105,18 +143,23 @@ server <- function(input, output, session) {
         mydata <- mydata[[3]]$properties
         mydata$referencedate <-
           as.Date(substring(mydata$Meldedatum, 1, 10))
-        bayerndata <- mydata %>% filter(Bundesland == 'Bayern')
-        munichdata <-
-          bayerndata %>% filter(Landkreis == 'SK München')
-        return(munichdata)
+        # Since population only knows whole of Berlin, I update this in the numbers from RKI (11001-11012 --> 11000)
+        mydata[grepl(pattern = '110(0[1-9]|1[0-2])',x = mydata$IdLandkreis),]$IdLandkreis <- '11000'
+        
+        #bayerndata <- mydata %>% filter(Bundesland == 'Bayern')
+        #munichdata <-
+        #  bayerndata %>% filter(Landkreis == 'SK München')
+        #return(munichdata)
+        #mydata <- mydata%>%filter(IdLandkreis %in% myid())
+        return(mydata)
       }
     )
-  
+  currentdata<-reactive({mydata()%>%filter(IdLandkreis %in% myid())})
   maxDate <- reactive({
-    max(munichdata()$referencedate)
+    max(mydata()$referencedate)
   })
   minDate <- reactive({
-    min(munichdata()$referencedate)
+    min(mydata()$referencedate)
   })
   observe({
     updateDateRangeInput(
@@ -128,16 +171,26 @@ server <- function(input, output, session) {
       max = maxDate()
     )
   })
+
+  tmppopulation<-reactive({returnvalue <- landkreisedim%>%filter(IdLandkreis %in% myid())
+  return(sum(as.double(returnvalue$Population)))
+  })
+  # calculating Schwellen- and Signalwert
+  grenzmean <- reactive(tmppopulation() / 100000 * 50 / 7)
+  grenzmeanyellow <- reactive(tmppopulation() / 100000 * 35 / 7)
+  
+  observe(print(tmppopulation()))
+#  observe(tmppopulation())
   
   perday <-
     reactive({
-      group_by(munichdata(), referencedate) %>% summarize(total = sum(AnzahlFall),
+      group_by(currentdata(), referencedate) %>% summarize(total = sum(AnzahlFall),
                                                           deaths = sum(AnzahlTodesfall))
     })
   perdaynew <- reactive({
     perday() %>% group_by(referencedate) %>%
       mutate(
-        siebentageinzidenz = round(x = getsiebentageinzidenz(referencedate, perday()), digits =
+        siebentageinzidenz = round(x = getsiebentageinzidenzMunich(referencedate, perday(),mypopulation=tmppopulation()), digits =
                                      1),
         siebentagetotal = getsiebentagetotal(referencedate, perday()),
         state = case_when(
@@ -145,7 +198,7 @@ server <- function(input, output, session) {
           siebentageinzidenz > 35 ~ 'YELLOW',
           TRUE ~ 'GREEN'
         ),
-        missingtoRed = round(grenzmean * 7 - siebentagetotal)
+        missingtoRed = round(grenzmean() * 7 - siebentagetotal)
       ) %>%
       ungroup() %>%
       mutate(
@@ -159,13 +212,17 @@ server <- function(input, output, session) {
         trendgoodBad = case_when(trend > 0 ~ 'BAD',
                                  TRUE ~ 'GOOD'),
         statereferencedate = case_when(
-          total > grenzmean ~ 'RED',
-          total > grenzmeanyellow ~ 'YELLOW',
+          total > grenzmean() ~ 'RED',
+          total > grenzmeanyellow() ~ 'YELLOW',
           TRUE ~ 'GREEN'
         )
       ) %>%
       select(-c(trendgoodBad))
   })
+  
+#  observe(print(perdaynew()))
+#  observe(print(typeof(perdaynew())))
+  
   output$inzidenz <-  renderPlotly({
     plot <-
       ggplot(
@@ -189,7 +246,7 @@ server <- function(input, output, session) {
         legend.title = element_blank(),
         legend.position = "bottom",
         legend.text = element_text(size = 12)
-      ) + ggtitle(paste0('Siebentageinzidenz München'))# +
+      ) + ggtitle(paste0('Siebentageinzidenz'))# +
     
     #scale_colour_brewer(type = 'qual')
     #renderPlotly(
@@ -220,13 +277,13 @@ server <- function(input, output, session) {
                                  100)) +
       stat_smooth(fullrange = TRUE, method = 'gam') +
       geom_col() + xlab('Time') + ylab('Fälle') + theme_bw() +
-      geom_hline(yintercept = grenzmean, color = "red") +
-      geom_hline(yintercept = grenzmeanyellow, color = "yellow") +
+      geom_hline(yintercept = grenzmean(), color = "red") +
+      geom_hline(yintercept = grenzmeanyellow(), color = "yellow") +
       theme(
         legend.title = element_blank(),
         legend.position = "bottom",
         legend.text = element_text(size = 12)
-      ) + ggtitle(paste0('Fälle München'))# +
+      ) + ggtitle(paste0('Fälle'))# +
     
     #scale_colour_brewer(type = 'qual')
     #renderPlotly(
@@ -247,14 +304,12 @@ server <- function(input, output, session) {
       ) + 100))) +
       coord_cartesian(ylim = c(0, max(perdaynew()$deaths) + 5)) +
       stat_smooth(fullrange = TRUE, method = 'gam') +
-      geom_col()  + xlab('Time') + ylab('Fälle') + theme_bw() +
-      geom_hline(yintercept = grenzmean, color = "red") +
-      geom_hline(yintercept = grenzmeanyellow, color = "yellow") +
+      geom_col()  + xlab('Time') + ylab('Todesfälle') + theme_bw() +
       theme(
         legend.title = element_blank(),
         legend.position = "bottom",
         legend.text = element_text(size = 12)
-      ) + ggtitle(paste0('Todesfälle München'))# +
+      ) + ggtitle(paste0('Todesfälle'))# +
     
     #scale_colour_brewer(type = 'qual')
     #renderPlotly(
@@ -264,7 +319,7 @@ server <- function(input, output, session) {
   output$byAge <- renderPlotly({
     plot <-
       ggplot(
-        data = munichdata() %>% group_by(referencedate, Altersgruppe) %>% summarize(total =
+        data = currentdata() %>% group_by(referencedate, Altersgruppe) %>% summarize(total =
                                                                                       sum(AnzahlFall)),
         aes(x = referencedate,
             y = total)
@@ -278,7 +333,7 @@ server <- function(input, output, session) {
   output$deathsbyAge <- renderPlotly({
     plot <-
       ggplot(
-        data = munichdata() %>% group_by(referencedate, Altersgruppe) %>% summarize(deaths =
+        data = currentdata() %>% group_by(referencedate, Altersgruppe) %>% summarize(deaths =
                                                                                       sum(AnzahlTodesfall)),
         aes(x = referencedate,
             y = deaths)
@@ -326,10 +381,10 @@ server <- function(input, output, session) {
       height = 10000,
       class = 'cell-border stripe',
       callback = JS(
-        "
-var tips = ['referencedate', 'Cases on that day; Meaning of the color: State of Siebentageinzidenz, if every day would have the same amount of cases as referencedate',
+        paste0("
+var tips = ['referencedate', 'Cases on that day; Meaning of the color: State of Siebentageinzidenz, if every day would have the same amount of cases as referencedate; Green: <= ",floor(grenzmeanyellow()),", Red: > ",floor(grenzmean()),", Yellow: Else',
             'Deaths on that day',
-            '(cases for the last 7 days) / (munich population) * 100,000; Red: > 50, Green: <=35, Yellow: Else',
+            '(cases for the last 7 days) / (population) * 100,000; Red: > 50, Green: <=35, Yellow: Else',
             'Sum of cases for the last 7 days',
             'will be removed',
             'How many more cases would have meant a siebentageinzidenz over 50',
@@ -341,7 +396,7 @@ var tips = ['referencedate', 'Cases on that day; Meaning of the color: State of 
 for (var i = 0; i < tips.length; i++) {
   $(header[i]).attr('title', tips[i]);
 }
-")
+"))
       
       
     ) %>%
@@ -359,7 +414,7 @@ for (var i = 0; i < tips.length; i++) {
   
   output$tableout3 <- DT::renderDataTable({
     DT::datatable(
-      munichdata() %>% filter(
+      currentdata() %>% filter(
         referencedate >= input$dates[1] & referencedate <= input$dates[2]
       ),
       extensions = 'Buttons',

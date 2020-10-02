@@ -1,0 +1,2 @@
+getsiebentageinzidenzMunich<-function(max=maxDate,mytable,mypopulation=einwohnerMunich){max.Date<-as.Date(max)
+sum(mytable%>%filter(referencedate>=max.Date-6&referencedate<=max.Date)%>%select(total))/mypopulation*100000}  
