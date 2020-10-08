@@ -1,3 +1,6 @@
+# save with Encoding Windows-1252 (when done with Rscript in terminal)
+# when done via Runapp in seperate R file: doch in UTF 8
+print(sessionInfo())
 library(jsonlite)
 library(dplyr)
 library(ggplot2)
@@ -15,11 +18,10 @@ population <-
     startRow = 3
   )
 landkreisedim <-
-  population %>% select(IdLandkreis = `Schlüssel-nummer`,
+  population %>% select(IdLandkreis = 'Schlüssel-nummer',
                         Population = `Bevölkerung2)`,
                         Landkreis = `Kreisfreie.Stadt`) %>% filter(nchar(IdLandkreis) == 5) %>% mutate(id =
                                                                                                          c(substring(IdLandkreis, 1, 2)))
-
 # Since the official Munich page takes Munich numbers from 2018-12-31, I use this
 landkreisedim[landkreisedim$IdLandkreis == '09162',]$Population <-
   1471508
@@ -32,7 +34,11 @@ landkreisedim <-
   left_join(landkreisedim, bundeslaender, by = c('id' = 'id'))
 landkreisedim$id = NULL
 # functions
-wd.function <- paste0(getwd(), '/Corona/functions')
+mywd <- getwd()
+mywd <- gsub(pattern = '/Corona',replacement = '',x = mywd)
+print(mywd)
+wd.function <- paste0(mywd, '/Corona/functions')
+print(wd.function)
 files.sources <- list.files(
   wd.function,
   recursive = T,
@@ -61,7 +67,8 @@ body <-
             choices = landkreisedim$Bundesland,
             selected = '',
             multiple = T,
-            options = list(onInitialize = I('function() { this.setValue("Bayern"); }'))
+            options = list(onInitialize = I('function() { this.setValue(""); }'))
+#            options = list(onInitialize = I('function() { this.setValue("Bayern"); }'))
           )
         ),
         column(3, uiOutput('landkreis')),
@@ -93,7 +100,7 @@ body <-
       fluidRow(column(6,
                       plotlyOutput('total', width = '100%')),
                column(6,
-                      plotlyOutput('deaths', width = '100%'))),
+                      plotlyOutput('over60', width = '100%'))),
       fluidRow(
         box(
           title = 'Grouped per day',
@@ -104,9 +111,10 @@ body <-
         )
       ),
       fluidRow(column(
-        12,
-        plotlyOutput('deathratio', width = '100%')
-      )),
+        6,
+        plotlyOutput('deaths', width = '100%')
+        ),column(6,
+                 plotlyOutput('deathratio', width = '100%'))),
       fluidRow(column(12,
                       plotlyOutput('byAge', width = '100%'))),
       #    fluidRow(plotlyOutput('byGender', width = '100%')),
@@ -145,7 +153,8 @@ server <- function(input, output, session) {
       options = list(
         placeholder = '',
         onInitialize = I(
-          'function() { this.setValue("München, Landeshauptstadt"); }'
+#          'function() { this.setValue("München, Landeshauptstadt"); }'
+          'function() { this.setValue(""); }'
         )
       )
     )
@@ -304,7 +313,7 @@ server <- function(input, output, session) {
           perdaynewdatesfiltered()$referencedate
         ) + 100)
       )) +
-      coord_cartesian(ylim = c(0, max(
+      coord_cartesian(ylim = c(0, 1.2*max(
         perdaynewdatesfiltered()$siebentageinzidenz
       ) +
         50)) +
@@ -347,23 +356,62 @@ server <- function(input, output, session) {
         ) + 100)
       )) +
       coord_cartesian(ylim = c(
-        min(perdaynewdatesfiltered()$total) - 5,
-        max(perdaynewdatesfiltered()$total) +
-          100
+        0,
+        1.2*max(perdaynewdatesfiltered()$total)
       )) +
       stat_smooth(
         fullrange = TRUE,
         method = 'gam',
         formula = y ~ s(x, bs = "cs")
       ) +
-      geom_col() + xlab('Time') + ylab('Fälle') + theme_bw() +
+      geom_col() + xlab('Time') + ylab('Cases') + theme_bw() +
       geom_hline(yintercept = grenzmean(), color = "red") +
       geom_hline(yintercept = grenzmeanyellow(), color = "yellow") +
       theme(
         legend.title = element_blank(),
         legend.position = "bottom",
         legend.text = element_text(size = 12)
-      ) + ggtitle(paste0('Fälle'))# +
+      ) + ggtitle(paste0('Cases'))# +
+    
+    #scale_colour_brewer(type = 'qual')
+    #renderPlotly(
+    ggplotly(plot)
+  })
+
+  output$over60 <- renderPlotly({
+    thisdata <- currentdata() %>% filter(Altersgruppe %in% c('A60-A79','A80+')&referencedate >= input$dates[1] &
+                                                                                            referencedate <= input$dates[2])%>%
+                                  group_by(referencedate) %>% summarize(total =
+                                                                            sum(AnzahlFall), .groups =
+                                                                            'drop')
+    
+    plot <-
+      ggplot(data = thisdata,
+             aes(x = referencedate,
+                 y = total)) +
+      xlim(c(
+        min(thisdata$referencedate),
+        as.Date(max(
+          thisdata$referencedate
+        ) + 100)
+      )) +
+      coord_cartesian(ylim = c(
+        0,
+        1.2*max(thisdata$total)
+      )) +
+      stat_smooth(
+        fullrange = TRUE,
+        method = 'gam',
+        formula = y ~ s(x, bs = "cs")
+      ) +
+      geom_col() + xlab('Time') + ylab('Cases') + theme_bw() +
+#      geom_hline(yintercept = grenzmean(), color = "red") +
+#      geom_hline(yintercept = grenzmeanyellow(), color = "yellow") +
+      theme(
+        legend.title = element_blank(),
+        legend.position = "bottom",
+        legend.text = element_text(size = 12)
+      ) + ggtitle(paste0('Cases over 60'))# +
     
     #scale_colour_brewer(type = 'qual')
     #renderPlotly(
@@ -381,18 +429,18 @@ server <- function(input, output, session) {
           perdaynewdatesfiltered()$referencedate
         ) + 100)
       )) +
-      coord_cartesian(ylim = c(0, max(perdaynewdatesfiltered()$deaths) + 5)) +
+      coord_cartesian(ylim = c(0, 1.2*max(perdaynewdatesfiltered()$deaths))) +
       stat_smooth(
         fullrange = TRUE,
         method = 'gam',
         formula = y ~ s(x, bs = "cs")
       ) +
-      geom_col()  + xlab('Time') + ylab('Todesfälle') + theme_bw() +
+      geom_col()  + xlab('Time') + ylab('Deaths') + theme_bw() +
       theme(
         legend.title = element_blank(),
         legend.position = "bottom",
         legend.text = element_text(size = 12)
-      ) + ggtitle(paste0('Todesfälle'))# +
+      ) + ggtitle(paste0('Deaths'))# +
     
     #scale_colour_brewer(type = 'qual')
     #renderPlotly(
@@ -409,7 +457,7 @@ server <- function(input, output, session) {
           perdaynewdatesfiltered()$referencedate
         ) + 100)
       )) +
-      coord_cartesian(ylim = c(0, max(
+      coord_cartesian(ylim = c(0, 1.2*max(
         perdaynewdatesfiltered()$deathratio
       ))) +
       stat_smooth(
@@ -417,12 +465,12 @@ server <- function(input, output, session) {
         method = 'gam',
         formula = y ~ s(x, bs = "cs")
       ) +
-      geom_line()  + xlab('Time') + ylab('Letalität') + theme_bw() +
+      geom_line()  + xlab('Time') + ylab('Lethality') + theme_bw() +
       theme(
         legend.title = element_blank(),
         legend.position = "bottom",
         legend.text = element_text(size = 12)
-      ) + ggtitle(paste0('Letalität')) + scale_y_continuous(labels = scales::percent)# +
+      ) + ggtitle(paste0('Lethality')) + scale_y_continuous(labels = scales::percent)# +
     
     #scale_colour_brewer(type = 'qual')
     #renderPlotly(
@@ -431,7 +479,9 @@ server <- function(input, output, session) {
   output$byAge <- renderPlotly({
     plot <-
       ggplot(
-        data = currentdata() %>% group_by(referencedate, Altersgruppe) %>% summarize(total =
+        data = currentdata() %>% filter(referencedate >= input$dates[1] &
+                                          referencedate <= input$dates[2])%>%
+          group_by(referencedate, Altersgruppe) %>% summarize(total =
                                                                                        sum(AnzahlFall), .groups =
                                                                                        'drop') %>%
           group_by(Altersgruppe) %>% mutate(totalsperAge = sum(total)) %>%
@@ -439,32 +489,36 @@ server <- function(input, output, session) {
         aes(x = referencedate,
             y = total)
       ) +
-      geom_col() + ylab('Fälle') + xlab('Time')  + theme_bw() +
+      geom_col() + ylab('Cases') + xlab('Time')  + theme_bw() +
       scale_colour_brewer(type = 'qual') +
       facet_wrap( ~ Altersgruppe, scales = 'free_y') +
-      ggtitle(paste0('Fälle nach Altersgruppe'))
+      ggtitle(paste0('Cases by Age'))
     ggplotly(plot)
   })
   output$totalsbyBundesland <- renderPlotly({
     plot <-
       ggplot(
-        data = currentdata() %>% group_by(referencedate, Bundesland) %>% summarize(total =
+        data = currentdata() %>% filter(referencedate >= input$dates[1] &
+                                              referencedate <= input$dates[2])%>%
+          group_by(referencedate, Bundesland) %>% summarize(total =
                                                                                      sum(AnzahlFall), .groups =
                                                                                      'drop'),
         aes(x = referencedate,
             y = total)
       ) +
-      geom_col() + ylab('Fälle') + xlab('Time')  + theme_bw() +
+      geom_col() + ylab('Cases') + xlab('Time')  + theme_bw() +
       scale_colour_brewer(type = 'qual') +
       facet_wrap( ~ Bundesland, scales = 'free_y') +
-      ggtitle(paste0('Fälle nach Bundesland'))
+      ggtitle(paste0('Cases by States'))
     ggplotly(plot)
   })
   
   output$deathsbyAge <- renderPlotly({
     plot <-
       ggplot(
-        data = currentdata() %>% group_by(referencedate, Altersgruppe) %>% summarize(deaths =
+        data = currentdata()%>% filter(referencedate >= input$dates[1] &
+                                         referencedate <= input$dates[2])%>%
+          group_by(referencedate, Altersgruppe) %>% summarize(deaths =
                                                                                        sum(AnzahlTodesfall), .groups =
                                                                                        'drop') %>%
           group_by(Altersgruppe) %>% mutate(totalsperAge = sum(deaths)) %>%
@@ -472,10 +526,10 @@ server <- function(input, output, session) {
         aes(x = referencedate,
             y = deaths)
       ) +
-      geom_col() + ylab('Todesfälle') + xlab('Time')  + theme_bw() +
+      geom_col() + ylab('Deaths') + xlab('Time')  + theme_bw() +
       scale_colour_brewer(type = 'qual') +
       facet_wrap( ~ Altersgruppe, scales = 'free_y') +
-      ggtitle(paste0('Todesfälle nach Altersgruppe'))
+      ggtitle(paste0('Deaths by Age'))
     ggplotly(plot)
   })
   
@@ -499,8 +553,8 @@ server <- function(input, output, session) {
       perdaynewdatesfiltered() %>% arrange(desc(referencedate)),
       extensions = 'Buttons',
       options = list(
-        lengthMenu = c(5, 20, 1000),
-        pageLength = 5,
+        lengthMenu = c(7, 20, 1000),
+        pageLength = 7,
         scrollX = TRUE,
         dom = 'Bflrtip',
         buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
@@ -578,9 +632,10 @@ for (var i = 0; i < tips.length; i++) {
           filter(row_number()  ==  1) %>%
           select(
             siebentageinzidenz,
-            tomorrowmaxtoRed,
-            tomorrowmaxtoYellow
-          ),
+            tomorrowmaxtoRed,# = format(tomorrowmaxtoRed, big.mark = ","),
+            tomorrowmaxtoYellow# = format(tomorrowmaxtoYellow, big.mark = ",")
+          )%>%mutate(tomorrowmaxtoRed = format(tomorrowmaxtoRed, big.mark = ","),
+                     tomorrowmaxtoYellow = format(tomorrowmaxtoYellow, big.mark = ",")),
         population = format(tmppopulation()
                             , big.mark = ",")
         ,
