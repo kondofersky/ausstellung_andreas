@@ -1,6 +1,5 @@
 # save with Encoding Windows-1252 (when done with Rscript in terminal)
 # when done via Runapp in seperate R file: doch in UTF 8
-print(sessionInfo())
 library(jsonlite)
 library(dplyr)
 library(ggplot2)
@@ -33,12 +32,14 @@ bundeslaender <-
 landkreisedim <-
   left_join(landkreisedim, bundeslaender, by = c('id' = 'id'))
 landkreisedim$id = NULL
+
+populationByBundesland <- landkreisedim%>%group_by(Bundesland)%>%summarise(Population=sum(as.double(Population)),.groups='drop')
+populationByLandkreis <- landkreisedim%>%group_by(IdLandkreis,Landkreis)%>%summarise(Population=sum(as.double(Population)),.groups='drop')
+
 # functions
 mywd <- getwd()
 mywd <- gsub(pattern = '/Corona',replacement = '',x = mywd)
-print(mywd)
 wd.function <- paste0(mywd, '/Corona/functions')
-print(wd.function)
 files.sources <- list.files(
   wd.function,
   recursive = T,
@@ -60,7 +61,7 @@ body <-
     fluidPage(
       fluidRow(
         column(
-          3,
+          2,
           selectizeInput(
             inputId = 'bundesland',
             label = 'Bundesland',
@@ -73,7 +74,7 @@ body <-
         ),
         column(3, uiOutput('landkreis')),
         column(
-          3,
+          2,
           dateRangeInput(
             inputId = 'dates',
             label = 'Date Range',
@@ -82,8 +83,19 @@ body <-
             min = NULL,
             weekstart	= 1
           )
-        )
-      ),
+        ),
+tabBox(title='Rankings',
+       width=5,
+       tabPanel(title='Bundesland',status='success',
+                collapsible=TRUE,
+                DT::dataTableOutput(outputId = 'tableoutbundeslaender')
+       ),
+       tabPanel(title='Landkreis',status='success',
+                collapsible=TRUE,
+                DT::dataTableOutput(outputId = 'tableoutlandkreis')
+       )
+)
+),
       fluidRow(
         box(
           title = 'First Look',
@@ -184,13 +196,14 @@ server <- function(input, output, session) {
   
   mydata <-
     reactivePoll(
-      intervalMillis = 5 * 60 * 1000,
+      intervalMillis = 10 * 60 * 1000,
       session = session,
       checkFunc = function() {
         mywebcrawl <-
           GET(
             'https://opendata.arcgis.com/datasets/dd4580c810204019a7b8eb3e0b329dd6_0.geojson'
           )
+        print(mywebcrawl$headers$`last-modified`)
         return(mywebcrawl$headers$`last-modified`)
       },
       valueFunc = function() {
@@ -244,8 +257,7 @@ server <- function(input, output, session) {
   grenzmeanyellow <- reactive(tmppopulation() / 100000 * 35 / 7)
   
   #  observe(print(tmppopulation()))
-  #  observe(tmppopulation())
-  
+
   perday <-
     reactive({
       group_by(currentdata(), referencedate) %>% summarize(
@@ -294,8 +306,6 @@ server <- function(input, output, session) {
       select(-c(trendgoodBad))
   })
   
-  #  observe(print(perdaynew()))
-  #  observe(print(typeof(perdaynew())))
   perdaynewdatesfiltered <- reactive(
     perdaynew() %>% filter(referencedate >= input$dates[1] &
                              referencedate <= input$dates[2]) %>% mutate(deathratio = round(deaths / total, digits = 4))
@@ -658,6 +668,69 @@ for (var i = 0; i < tips.length; i++) {
   #                                               default = 'red'
                                                   ))
   })
+  casesperstate <- reactive({
+    mydata() %>% filter(referencedate>=maxDate()-6)%>%group_by(Bundesland) %>%summarize(
+      total = sum(AnzahlFall),
+      #    deaths = sum(AnzahlTodesfall),
+      .groups = 'drop'
+    )
+  })
+  byBundesland<-reactive({left_join(populationByBundesland,casesperstate(), by = "Bundesland")%>%
+      mutate(Inzidenz=round(total/Population*100000,digits = 1))%>%
+    select(-c(total))%>%
+      arrange(desc(Inzidenz))%>%
+      mutate(Population=format(Population, big.mark = ","))
+  })
+  casesperlandkreis <-reactive({
+    mydata() %>% filter(referencedate>=maxDate()-6)%>%group_by(IdLandkreis) %>%summarize(
+      total = sum(AnzahlFall),
+      #    deaths = sum(AnzahlTodesfall),
+      .groups = 'drop'
+    )})
+  bylandkreis <- reactive({left_join(populationByLandkreis,casesperlandkreis(), by = "IdLandkreis")%>%
+      mutate(Inzidenz=round(total/Population*100000,digits = 1))%>%
+      select(-c(total))%>%
+      arrange(desc(Inzidenz))%>%
+      mutate(Population=format(Population, big.mark = ","))
+    })
   
+  output$tableoutlandkreis <- DT::renderDataTable({
+    DT::datatable(
+      bylandkreis() %>% filter(IdLandkreis %in% myid())%>%select(-c(IdLandkreis)),
+      options = list(
+        pageLength = 10,
+        dom = 'frtp'
+      ),
+      rownames = TRUE
+    ) %>%
+      formatStyle('Inzidenz',
+                  backgroundColor = styleInterval(c(35, 50),
+                                                  c('lightgreen', 'yellow', 'red')#,
+                                                  #                                               default = 'red'
+                  ))
+    
+  })
+  
+  output$tableoutbundeslaender <- DT::renderDataTable({
+    DT::datatable(
+      byBundesland(),
+      options = list(
+        pageLength = 0,
+        lengthMenu = c(0, 1, 10, 100),
+        dom = 'lfrtp'
+      ),
+      rownames = TRUE
+    ) %>%
+      formatStyle('Inzidenz',
+                  backgroundColor = styleInterval(c(35, 50),
+                                                  c('lightgreen', 'yellow', 'red')#,
+                                                  #                                               default = 'red'
+                  ))
+  })
+  session$onSessionEnded(function() { 
+    stopApp()
+    q("no") 
+  })
+
 }
 shinyApp(ui = ui, server = server)
