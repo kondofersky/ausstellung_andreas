@@ -1,9 +1,10 @@
 library(dplyr)
+library(dplyr)
 library(tidyquant)
 wd.cur <- getwd()
 
 # fetch all stocks from 's&p600'
-sp600 <- tq_index('SP600')%>%mutate(index='SP600')
+sp600 <- tq_index('SP600') %>% mutate(index='SP600')
 
 # fetch data for last 10 years for s&p600-indices
 mysp600data <- tq_get(sp600$symbol,
